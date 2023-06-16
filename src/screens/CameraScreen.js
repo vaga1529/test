@@ -1,26 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Image, View, Platform } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as Permissions from 'expo-permissions';
+import React, { useEffect, useRef, useState } from 'react'
+import { View, Button } from 'react-native'
+import { useNavigation } from '@react-navigation/native'
+import { Camera } from 'expo-camera'
+import styled from 'styled-components/native'
+import ImageDisplay from '../components/ImageDisplay'
+import useCamera from '../hooks/useCamera'
+import useGallery from '../hooks/useGallery'
+import * as ImagePicker from 'expo-image-picker'
 
-export default function ImagePickerExample() {
-  const [image, setImage] = useState(null);
+const CameraScreen = () => {
+  const navigation = useNavigation()
+  const camera = useCamera()
+  const gallery = useGallery()
+  const cameraRef = useRef(null)
+  const [cameraReady, setCameraReady] = useState(false)
 
   useEffect(() => {
-    getPermissionAsync();
-  }, []);
-
-  const getPermissionAsync = async () => {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();      if (status !== 'granted') {
-        alert('갤러리 접근 권한이 필요합니다.');
-      }
-      const { cameraStatus } = await Permissions.askAsync(Permissions.CAMERA);
-      if (cameraStatus !== 'granted') {
-        alert('카메라 접근 권한이 필요합니다.');
-      }
-    }
-  };
+    camera.getPermissionAsync()
+    gallery.getPermissionAsync()
+  }, [])
 
   const pickImage = async () => {
     try {
@@ -29,40 +27,87 @@ export default function ImagePickerExample() {
         allowsEditing: true,
         aspect: [4, 3],
         quality: 1,
-      });
-      if (!result.cancelled) {
-        setImage(result.uri);
+      })
+      if (!result.canceled) {
+        setCameraReady(false) // 갤러리 탭으로 이동 시 카메라 준비 상태를 false로 설정
+        navigation.navigate('Gallery', { imageUri: result.assets[0].uri })
       }
-
-      console.log(result);
     } catch (E) {
-      console.log(E);
+      console.log(E)
     }
-  };
+  }
 
   const takeImage = async () => {
     try {
-      let result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsEditing: true,
-        aspect: [4, 3],
+      setCameraReady(true)
+      let options = {
         quality: 1,
-      });
-      if (!result.cancelled) {
-        setImage(result.uri);
+        base64: true,
+        exif: false,
       }
 
-      console.log(result);
+      let newPhoto = await cameraRef.current.takePictureAsync(options)
+
+      if (newPhoto.uri) {
+        setCameraReady(false) // 갤러리 탭으로 이동 시 카메라 준비 상태를 false로 설정
+        navigation.navigate('Gallery', { imageUri: newPhoto.uri })
+      }
     } catch (E) {
-      console.log(E);
+      console.log(E)
     }
-  };
+  }
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Button title="갤러리에서 사진 선택" onPress={pickImage} />
-      <Button title="카메라로 사진 찍기" onPress={takeImage} />
-      {image && <Image source={{ uri: image }} style={{ width: 200, height: 200 }} />}
-    </View>
-  );
+    <Container>
+      {cameraReady && (
+        <CameraView
+          type={camera.type}
+          ref={cameraRef}
+          onCameraReady={() => setCameraReady(true)}
+          ratio="4:3"
+        >
+          <ButtonContainer>
+            <StyledButton title="Flip" onPress={camera.toggleCameraType} />
+            <StyledButton title="Take Picture" onPress={takeImage} />
+          </ButtonContainer>
+        </CameraView>
+      )}
+      <ButtonContainer>
+        <StyledButton
+          title="Open camera"
+          onPress={() => {
+            setCameraReady(true)
+          }}
+        />
+        <StyledButton title="Select an image" onPress={pickImage} />
+      </ButtonContainer>
+    </Container>
+  )
 }
+
+const Container = styled(View)`
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+`
+
+const CameraView = styled(Camera)`
+  flex: 5;
+  width: 100%;
+`
+
+const ButtonContainer = styled(View)`
+  flex: 1;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-end;
+  margin-bottom: 20px;
+`
+
+const StyledButton = styled(Button)`
+  margin-horizontal: 10px;
+  margin-vertical: 5px;
+`
+
+export default CameraScreen
+;``
